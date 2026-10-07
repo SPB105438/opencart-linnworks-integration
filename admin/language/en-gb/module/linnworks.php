@@ -1,4 +1,4 @@
 <?php
 $_['heading_title']='Linnworks Integration';
-$_['text_success']='Success: Linnworks Integration settings saved.';
+$_['text_success']='Success: Linnworks settings saved.';
 $_['error_permission']='Warning: You do not have permission to modify Linnworks Integration.';

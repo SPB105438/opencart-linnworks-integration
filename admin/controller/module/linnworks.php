@@ -1,27 +1,329 @@
 <?php
 namespace Opencart\Admin\Controller\Extension\Linnworks\Module;
+
 class Linnworks extends \Opencart\System\Engine\Controller {
- private array $error=[];
- private array $keys=['status','application_id','application_secret','token','auth_url','timeout','public_base_url','channel_name','channel_friendly_name','dry_run','stock_location_id','price_authority','price_field','identifier_code','model_normalisation','readiness_target','source','sub_source','store_code','store_name','export_status_id','complete_status_id'];
- public function index():void{
-  $this->load->language('extension/linnworks/module/linnworks');$this->document->setTitle($this->language->get('heading_title'));$this->load->model('setting/setting');$this->load->model('extension/linnworks/module/linnworks');
-  if(($this->request->server['REQUEST_METHOD']??'')==='POST'&&$this->validate()){$s=$this->request->post;$s['module_linnworks_status']=1;$s['module_linnworks_dry_run']=1;$this->model_setting_setting->editSetting('module_linnworks',$s);$this->session->data['success']=$this->language->get('text_success');$this->response->redirect($this->url->link('extension/linnworks/module/linnworks','user_token='.$this->session->data['user_token'],true));}
-  foreach($this->keys as $k){$n='module_linnworks_'.$k;$data[$n]=$this->request->post[$n]??$this->config->get($n);} $defaults=['auth_url'=>'https://api.linnworks.net/api/Auth/AuthorizeByApplication','timeout'=>30,'channel_name'=>'GBAPPLIANCESOPENCART','channel_friendly_name'=>'GB Appliances OpenCart','price_authority'=>'opencart','price_field'=>'purchase_price','identifier_code'=>'EAN','model_normalisation'=>'optional_n_prefix','readiness_target'=>90,'source'=>'Employee Store','sub_source'=>'OpenCart'];foreach($defaults as $k=>$v){$n='module_linnworks_'.$k;if(!$data[$n])$data[$n]=$v;}
-  $data['heading_title']=$this->language->get('heading_title');$data['success']=$this->session->data['success']??'';unset($this->session->data['success']);$data['error_warning']=$this->error['warning']??'';$data['dashboard']=$this->model_extension_linnworks_module_linnworks->dashboard();$data['issues']=$this->model_extension_linnworks_module_linnworks->issues(['limit'=>8]);$data['history_rows']=$this->model_extension_linnworks_module_linnworks->scanHistory(8);$data['code_types']=$this->model_extension_linnworks_module_linnworks->codeTypes();$data['stock_locations']=[];try{if($this->hasCredentials($data))$data['stock_locations']=$this->model_extension_linnworks_module_linnworks->locations($this->settingsFromData($data));}catch(\Throwable $e){$data['location_error']=$e->getMessage();}
-  $t='user_token='.$this->session->data['user_token'];foreach(['test','locations','scan','diagnostics','results','history','export'] as $a)$data[$a]=$this->url->link('extension/linnworks/module/linnworks|'.$a,$t,true);$data['save']=$this->url->link('extension/linnworks/module/linnworks',$t,true);$data['back']=$this->url->link('marketplace/extension',$t.'&type=module');$data['header']=$this->load->controller('common/header');$data['column_left']=$this->load->controller('common/column_left');$data['footer']=$this->load->controller('common/footer');$this->response->setOutput($this->load->view('extension/linnworks/module/linnworks',$data));
- }
- public function test():void{$this->json(function(){return ['success'=>'Connected successfully','session'=>$this->model_extension_linnworks_module_linnworks->authorize($this->posted())];});}
- public function locations():void{$this->json(function(){return ['success'=>'Locations retrieved','locations'=>$this->model_extension_linnworks_module_linnworks->locations($this->posted())];});}
- public function diagnostics():void{$this->json(function(){$c=[['name'=>'PHP cURL','status'=>function_exists('curl_init')],['name'=>'OpenSSL','status'=>extension_loaded('openssl')]];try{$a=$this->model_extension_linnworks_module_linnworks->authorize($this->posted());$c[]=['name'=>'Linnworks authentication','status'=>true,'detail'=>$a['Locality']??''];}catch(\Throwable $e){$c[]=['name'=>'Linnworks authentication','status'=>false,'detail'=>$e->getMessage()];}return ['success'=>'Diagnostics complete','checks'=>$c];});}
- public function scan():void{$this->json(function(){return ['success'=>'Catalogue scan complete','scan'=>$this->model_extension_linnworks_module_linnworks->scan((string)($this->config->get('module_linnworks_identifier_code')?:'EAN'))];});}
- public function results():void{$this->load->model('extension/linnworks/module/linnworks');$f=['scan_id'=>(int)($this->request->get['scan_id']??0),'severity'=>(string)($this->request->get['severity']??''),'category'=>(string)($this->request->get['category']??''),'ready'=>(string)($this->request->get['ready']??''),'search'=>trim((string)($this->request->get['search']??'')),'limit'=>100];$data=['filters'=>$f,'scan'=>$this->model_extension_linnworks_module_linnworks->scanSummary($f['scan_id']),'products'=>$this->model_extension_linnworks_module_linnworks->scanProducts($f),'issues'=>$this->model_extension_linnworks_module_linnworks->issues($f)];$t='user_token='.$this->session->data['user_token'];$data['back']=$this->url->link('extension/linnworks/module/linnworks',$t);$data['export']=$this->url->link('extension/linnworks/module/linnworks|export',$t.'&scan_id='.(int)($data['scan']['scan_id']??0));$data['header']=$this->load->controller('common/header');$data['column_left']=$this->load->controller('common/column_left');$data['footer']=$this->load->controller('common/footer');$this->response->setOutput($this->load->view('extension/linnworks/module/linnworks_results',$data));}
- public function history():void{$this->load->model('extension/linnworks/module/linnworks');$data['scans']=$this->model_extension_linnworks_module_linnworks->scanHistory(100);$t='user_token='.$this->session->data['user_token'];$data['results_base']=$this->url->link('extension/linnworks/module/linnworks|results',$t);$data['back']=$this->url->link('extension/linnworks/module/linnworks',$t);$data['header']=$this->load->controller('common/header');$data['column_left']=$this->load->controller('common/column_left');$data['footer']=$this->load->controller('common/footer');$this->response->setOutput($this->load->view('extension/linnworks/module/linnworks_history',$data));}
- public function export():void{$this->load->model('extension/linnworks/module/linnworks');$rows=$this->model_extension_linnworks_module_linnworks->scanProducts(['scan_id'=>(int)($this->request->get['scan_id']??0),'limit'=>100000]);$o=fopen('php://temp','w+');fputcsv($o,['Product ID','Name','Model','Normalised Model','Identifier','Price','Quantity','Score','Ready']);foreach($rows as $r)fputcsv($o,[$r['product_id'],$r['name'],$r['model'],$r['normalised_model'],$r['identifier_value'],$r['price'],$r['quantity'],$r['readiness_score'],$r['ready_for_sync']]);rewind($o);$this->response->addHeader('Content-Type: text/csv');$this->response->addHeader('Content-Disposition: attachment; filename="linnworks-scan.csv"');$this->response->setOutput(stream_get_contents($o));}
- public function install():void{if($this->user->hasPermission('modify','extension/linnworks/module/linnworks')){$this->load->model('extension/linnworks/module/linnworks');$this->model_extension_linnworks_module_linnworks->install();}}
- public function uninstall():void{}
- private function json(callable $fn):void{$this->load->language('extension/linnworks/module/linnworks');try{if(!$this->user->hasPermission('modify','extension/linnworks/module/linnworks'))throw new \RuntimeException($this->language->get('error_permission'));$this->load->model('extension/linnworks/module/linnworks');$r=$fn();}catch(\Throwable $e){$r=['error'=>$e->getMessage()];}$this->response->addHeader('Content-Type: application/json');$this->response->setOutput(json_encode($r));}
- private function posted():array{return ['application_id'=>(string)($this->request->post['module_linnworks_application_id']??$this->config->get('module_linnworks_application_id')),'application_secret'=>(string)($this->request->post['module_linnworks_application_secret']??$this->config->get('module_linnworks_application_secret')),'token'=>(string)($this->request->post['module_linnworks_token']??$this->config->get('module_linnworks_token')),'auth_url'=>(string)($this->request->post['module_linnworks_auth_url']??$this->config->get('module_linnworks_auth_url')),'timeout'=>(int)($this->request->post['module_linnworks_timeout']??30)];}
- private function settingsFromData(array $d):array{return ['application_id'=>$d['module_linnworks_application_id'],'application_secret'=>$d['module_linnworks_application_secret'],'token'=>$d['module_linnworks_token'],'auth_url'=>$d['module_linnworks_auth_url'],'timeout'=>$d['module_linnworks_timeout']];}
- private function hasCredentials(array $d):bool{return !empty($d['module_linnworks_application_id'])&&!empty($d['module_linnworks_application_secret'])&&!empty($d['module_linnworks_token']);}
- protected function validate():bool{if(!$this->user->hasPermission('modify','extension/linnworks/module/linnworks'))$this->error['warning']=$this->language->get('error_permission');return !$this->error;}
+    private array $error = [];
+
+    private array $setting_keys = [
+        'status',
+        'application_id',
+        'application_secret',
+        'token',
+        'auth_url',
+        'timeout',
+        'public_base_url',
+        'channel_name',
+        'channel_friendly_name',
+        'dry_run',
+        'stock_location_id',
+        'price_authority',
+        'price_field'
+    ];
+
+    public function index(): void {
+        $this->load->language('extension/linnworks/module/linnworks');
+        $this->document->setTitle($this->language->get('heading_title'));
+
+        $this->load->model('setting/setting');
+        $this->load->model('extension/linnworks/module/linnworks');
+
+        if (($this->request->server['REQUEST_METHOD'] ?? '') === 'POST' && $this->validate()) {
+            $settings = $this->request->post;
+            $settings['module_linnworks_status'] = 1;
+            $settings['module_linnworks_dry_run'] = 1;
+
+            $this->model_setting_setting->editSetting('module_linnworks', $settings);
+            $this->session->data['success'] = $this->language->get('text_success');
+
+            $this->response->redirect(
+                $this->url->link(
+                    'extension/linnworks/module/linnworks',
+                    'user_token=' . $this->session->data['user_token'],
+                    true
+                )
+            );
+        }
+
+        foreach ($this->setting_keys as $key) {
+            $setting_name = 'module_linnworks_' . $key;
+            $data[$setting_name] = $this->request->post[$setting_name] ?? $this->config->get($setting_name);
+        }
+
+        $data['heading_title'] = $this->language->get('heading_title');
+        $data['module_linnworks_auth_url'] = $data['module_linnworks_auth_url'] ?: 'https://api.linnworks.net/api/Auth/AuthorizeByApplication';
+        $data['module_linnworks_timeout'] = $data['module_linnworks_timeout'] ?: 30;
+        $data['module_linnworks_public_base_url'] = $data['module_linnworks_public_base_url'] ?: 'https://linnworks-gateway.spectrumbrands.com';
+        $data['module_linnworks_channel_name'] = $data['module_linnworks_channel_name'] ?: 'GBAPPLIANCESOPENCART';
+        $data['module_linnworks_channel_friendly_name'] = $data['module_linnworks_channel_friendly_name'] ?: 'GB Appliances OpenCart';
+        $data['module_linnworks_price_authority'] = $data['module_linnworks_price_authority'] ?: 'opencart';
+        $data['module_linnworks_price_field'] = $data['module_linnworks_price_field'] ?: 'purchase_price';
+
+        $data['success'] = $this->session->data['success'] ?? '';
+        unset($this->session->data['success']);
+
+        $data['error_warning'] = $this->error['warning'] ?? '';
+        $data['counts'] = $this->model_extension_linnworks_module_linnworks->counts();
+        $data['logs'] = $this->model_extension_linnworks_module_linnworks->logs();
+        $data['locations'] = [];
+
+        try {
+            if ($this->hasCredentials($data)) {
+                $data['locations'] = $this->model_extension_linnworks_module_linnworks->locations(
+                    $this->settingsFromData($data)
+                );
+            }
+        } catch (\Throwable $exception) {
+            $data['location_error'] = $exception->getMessage();
+        }
+
+        $data['endpoints'] = $this->channelEndpoints($data['module_linnworks_public_base_url']);
+
+        $user_token = 'user_token=' . $this->session->data['user_token'];
+
+        $data['breadcrumbs'] = [
+            [
+                'text' => 'Home',
+                'href' => $this->url->link('common/dashboard', $user_token)
+            ],
+            [
+                'text' => 'Extensions',
+                'href' => $this->url->link('marketplace/extension', $user_token . '&type=module')
+            ],
+            [
+                'text' => $data['heading_title'],
+                'href' => ''
+            ]
+        ];
+
+        $data['save'] = $this->url->link(
+            'extension/linnworks/module/linnworks',
+            $user_token,
+            true
+        );
+
+        // OpenCart 4.1 uses the pipe separator for controller actions in URLs.
+        $data['test'] = $this->url->link(
+            'extension/linnworks/module/linnworks|test',
+            $user_token,
+            true
+        );
+        $data['locations'] = $data['locations'];
+        $data['locations_url'] = $this->url->link(
+            'extension/linnworks/module/linnworks|locations',
+            $user_token,
+            true
+        );
+        $data['scan'] = $this->url->link(
+            'extension/linnworks/module/linnworks|scan',
+            $user_token,
+            true
+        );
+        $data['diagnostics'] = $this->url->link(
+            'extension/linnworks/module/linnworks|diagnostics',
+            $user_token,
+            true
+        );
+
+        // The Twig template expects `locations` to be the action URL in one button.
+        // Preserve the location list separately and pass the URL under the expected key.
+        $data['stock_locations'] = $data['locations'];
+        $data['locations'] = $data['locations_url'];
+
+        $data['back'] = $this->url->link(
+            'marketplace/extension',
+            $user_token . '&type=module'
+        );
+
+        $data['header'] = $this->load->controller('common/header');
+        $data['column_left'] = $this->load->controller('common/column_left');
+        $data['footer'] = $this->load->controller('common/footer');
+
+        $this->response->setOutput(
+            $this->load->view('extension/linnworks/module/linnworks', $data)
+        );
+    }
+
+    public function test(): void {
+        $this->jsonResponse(function (): array {
+            $session = $this->model_extension_linnworks_module_linnworks->authorize(
+                $this->postedConnectionSettings()
+            );
+
+            $this->model_extension_linnworks_module_linnworks->log(
+                'info',
+                'connection',
+                'Authentication passed',
+                [
+                    'Locality' => $session['Locality'] ?? '',
+                    'Server' => $session['Server'] ?? '',
+                    'sid_registration' => $session['sid_registration'] ?? ''
+                ]
+            );
+
+            return [
+                'success' => 'Connected successfully',
+                'locality' => $session['Locality'] ?? '',
+                'server' => $session['Server'] ?? '',
+                'sid_registration' => $session['sid_registration'] ?? '',
+                'ttl' => $session['TTL'] ?? ''
+            ];
+        });
+    }
+
+    public function locations(): void {
+        $this->jsonResponse(function (): array {
+            return [
+                'success' => 'Locations retrieved',
+                'locations' => $this->model_extension_linnworks_module_linnworks->locations(
+                    $this->postedConnectionSettings()
+                )
+            ];
+        });
+    }
+
+    public function scan(): void {
+        $this->jsonResponse(function (): array {
+            return [
+                'success' => 'Catalogue scan complete',
+                'scan' => $this->model_extension_linnworks_module_linnworks->scan()
+            ];
+        });
+    }
+
+    public function diagnostics(): void {
+        $this->jsonResponse(function (): array {
+            $checks = [
+                [
+                    'name' => 'PHP cURL',
+                    'status' => function_exists('curl_init')
+                ],
+                [
+                    'name' => 'OpenSSL',
+                    'status' => extension_loaded('openssl')
+                ]
+            ];
+
+            try {
+                $session = $this->model_extension_linnworks_module_linnworks->authorize(
+                    $this->postedConnectionSettings()
+                );
+
+                $checks[] = [
+                    'name' => 'Linnworks authentication',
+                    'status' => true,
+                    'detail' => $session['Locality'] ?? ''
+                ];
+                $checks[] = [
+                    'name' => 'sid_registration',
+                    'status' => !empty($session['sid_registration'])
+                ];
+            } catch (\Throwable $exception) {
+                $checks[] = [
+                    'name' => 'Linnworks authentication',
+                    'status' => false,
+                    'detail' => $exception->getMessage()
+                ];
+            }
+
+            return [
+                'success' => 'Diagnostics complete',
+                'checks' => $checks
+            ];
+        });
+    }
+
+    public function install(): void {
+        if ($this->user->hasPermission('modify', 'extension/linnworks/module/linnworks')) {
+            $this->load->model('extension/linnworks/module/linnworks');
+            $this->model_extension_linnworks_module_linnworks->install();
+        }
+    }
+
+    public function uninstall(): void {
+        // Preserve integration identity, mappings and audit data.
+    }
+
+    private function jsonResponse(callable $callback): void {
+        $this->load->language('extension/linnworks/module/linnworks');
+        $response = [];
+
+        if (!$this->user->hasPermission('modify', 'extension/linnworks/module/linnworks')) {
+            $response = [
+                'error' => $this->language->get('error_permission')
+            ];
+        } else {
+            try {
+                $this->load->model('extension/linnworks/module/linnworks');
+                $response = $callback();
+            } catch (\Throwable $exception) {
+                $response = [
+                    'error' => $exception->getMessage()
+                ];
+            }
+        }
+
+        $this->response->addHeader('Content-Type: application/json');
+        $this->response->setOutput(json_encode($response));
+    }
+
+    private function postedConnectionSettings(): array {
+        return [
+            'application_id' => (string)($this->request->post['module_linnworks_application_id'] ?? $this->config->get('module_linnworks_application_id')),
+            'application_secret' => (string)($this->request->post['module_linnworks_application_secret'] ?? $this->config->get('module_linnworks_application_secret')),
+            'token' => (string)($this->request->post['module_linnworks_token'] ?? $this->config->get('module_linnworks_token')),
+            'auth_url' => (string)($this->request->post['module_linnworks_auth_url'] ?? $this->config->get('module_linnworks_auth_url')),
+            'timeout' => (int)($this->request->post['module_linnworks_timeout'] ?? 30)
+        ];
+    }
+
+    private function settingsFromData(array $data): array {
+        return [
+            'application_id' => $data['module_linnworks_application_id'],
+            'application_secret' => $data['module_linnworks_application_secret'],
+            'token' => $data['module_linnworks_token'],
+            'auth_url' => $data['module_linnworks_auth_url'],
+            'timeout' => $data['module_linnworks_timeout']
+        ];
+    }
+
+    private function hasCredentials(array $data): bool {
+        return !empty($data['module_linnworks_application_id'])
+            && !empty($data['module_linnworks_application_secret'])
+            && !empty($data['module_linnworks_token']);
+    }
+
+    private function channelEndpoints(string $base_url): array {
+        $base_url = rtrim($base_url, '/');
+        $paths = [
+            'AddNewUser' => 'add-new-user',
+            'UserConfig' => 'user-config',
+            'SaveConfig' => 'save-config',
+            'ConfigTest' => 'config-test',
+            'ConfigDeleted' => 'config-deleted',
+            'Orders' => 'orders',
+            'Despatch' => 'despatch',
+            'Cancel' => 'cancel',
+            'Refund' => 'refund',
+            'Products' => 'products',
+            'InventoryUpdate' => 'inventory-update',
+            'PriceUpdate' => 'price-update',
+            'ShippingTags' => 'shipping-tags',
+            'PaymentTags' => 'payment-tags'
+        ];
+
+        $endpoints = [];
+        foreach ($paths as $name => $path) {
+            $endpoints[$name . 'Endpoint'] = $base_url . '/linnworks-channel/' . $path;
+        }
+
+        return $endpoints;
+    }
+
+    protected function validate(): bool {
+        if (!$this->user->hasPermission('modify', 'extension/linnworks/module/linnworks')) {
+            $this->error['warning'] = $this->language->get('error_permission');
+        }
+
+        return !$this->error;
+    }
 }
