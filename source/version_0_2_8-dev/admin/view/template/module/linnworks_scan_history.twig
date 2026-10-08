@@ -1,0 +1,1 @@
+{{header}}{{column_left}}<div id="content"><div class="container-fluid"><a href="{{back}}">Back</a><h1>Scan History</h1><table class="table"><tbody>{% for s in scans %}<tr><td>#{{s.scan_id}}</td><td>{{s.started_at}}</td><td>{{s.products_scanned}}</td><td>{{s.health_score}}%</td></tr>{% else %}<tr><td>No scans.</td></tr>{% endfor %}</tbody></table></div></div>{{footer}}
