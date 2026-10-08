@@ -1,0 +1,49 @@
+{{ header }}{{ column_left }}
+<div id="content">
+  <div class="page-header">
+    <div class="container-fluid">
+      <a class="btn btn-light float-end" href="{{ back }}">Back</a>
+      <h1>Product Mapping Review</h1>
+    </div>
+  </div>
+  <div class="container-fluid">
+    <div class="alert alert-info">
+      Read-only first implementation. Suggestions are not approved automatically
+      and do not change OpenCart or Linnworks.
+    </div>
+    <p>{{ total }} mapping review rows</p>
+    <div class="card">
+      <div class="table-responsive">
+        <table class="table table-striped">
+          <thead>
+            <tr>
+              <th>Product ID</th><th>OpenCart Product</th><th>EAN</th><th>Model</th>
+              <th>Linnworks Product</th><th>SKU</th><th>Barcode</th>
+              <th>Method</th><th>Confidence</th><th>Status</th><th>Conflict</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for mapping in mappings %}
+              <tr>
+                <td>{{ mapping.product_id }}</td>
+                <td>{{ mapping.opencart_name }}</td>
+                <td>{{ mapping.opencart_ean }}</td>
+                <td>{{ mapping.opencart_model }}</td>
+                <td>{{ mapping.linnworks_title }}</td>
+                <td>{{ mapping.linnworks_sku }}</td>
+                <td>{{ mapping.linnworks_barcode }}</td>
+                <td>{{ mapping.match_method }}</td>
+                <td>{{ mapping.confidence }}%</td>
+                <td>{{ mapping.status }}</td>
+                <td>{{ mapping.conflict_reason }}</td>
+              </tr>
+            {% else %}
+              <tr><td colspan="11">No mapping suggestions have been generated.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{{ footer }}

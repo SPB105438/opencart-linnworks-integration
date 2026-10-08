@@ -1,0 +1,32 @@
+{{ header }}{{ column_left }}
+<div id="content">
+  <div class="page-header">
+    <div class="container-fluid">
+      <a class="btn btn-light float-end" href="{{ back }}">Back</a>
+      <h1>Mapping History</h1>
+    </div>
+  </div>
+  <div class="container-fluid">
+    <div class="card">
+      <div class="table-responsive">
+        <table class="table table-striped">
+          <thead><tr><th>Run</th><th>Scan</th><th>Started</th><th>Completed</th>
+          <th>Status</th><th>Processed</th><th>Suggested</th><th>Conflicts</th>
+          <th>Unmatched</th><th>Error</th></tr></thead>
+          <tbody>
+            {% for run in runs %}
+              <tr><td>#{{ run.mapping_run_id }}</td><td>#{{ run.scan_id }}</td>
+              <td>{{ run.started_at }}</td><td>{{ run.completed_at }}</td>
+              <td>{{ run.status }}</td><td>{{ run.products_processed }}</td>
+              <td>{{ run.suggested_count }}</td><td>{{ run.conflict_count }}</td>
+              <td>{{ run.unmatched_count }}</td><td>{{ run.error_message }}</td></tr>
+            {% else %}
+              <tr><td colspan="10">No mapping runs have completed.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{{ footer }}
